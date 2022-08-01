@@ -18,6 +18,7 @@ from subset_utils import (
     redact_relationships,
     schema_name,
     table_name,
+    target_filter_match,
     upstream_filter_match
 )
 from topo_orderer import get_topological_order_by_tables
@@ -167,15 +168,35 @@ class Subset:
         if len(relevant_key_constraints) == 0 or target in processed_tables:
             return False
 
+        # testing change to reduce iteration time, please remove after testing
+        if target in ['public.mailboxer_receipts', 'public.hiptag_tagging_sources', 'public.markets_parks',
+                      'public.parks_fire_alerts', 'public.gmb_accounts',
+                      'public.booking_checkout_rv_details', 'public.tax_rates',
+                      'public.park_messages', 'public.fire_bans', 'public.booking_night_price_details',
+                      'public.campground_park_messages', 'public.scheduled_messages',
+                      'public.internal_notes', 'public.host_reviews', 'public.payment_methodsx',
+                      'public.discounts', 'public.camper_service_fee_refunds',
+                      'public.user_credit_cards', 'public.user_rv_details', 'public.park_setups',
+                      'analytics.user_facts', 'public.host_service_fee_refunds', 'public.camper_reviews',
+                      'public.bulk_import_files', 'public.saved_lists', 'public.discount_email_auths',
+                      'public.feedback_to_campers', 'public.feedback_to_hosts', 'public.contributed_tips',
+                      'public.favorite_campgrounds', 'public.discount_park_auths', 'public.recommends',
+                      'public.discount_domain_auths', 'public.quality_answers', 'public.discount_campground_auths',
+                      'public.discount_stay_dates']:
+            return False
+
         temp_target_name = 'subset_temp_' + table_name(target)
 
         try:
-            # copy the whole table
+            # copy the original table
             columns_query = columns_to_copy(target, relationships, self.__source_conn)
             self.__db_helper.run_query('CREATE TEMPORARY TABLE {} AS SELECT * FROM {} LIMIT 0'.format(
                 quoter(temp_target_name), fully_qualified_table(mysql_db_name_hack(target, self.__destination_conn))),
                 self.__destination_conn)
             query = 'SELECT {} FROM {}'.format(columns_query, fully_qualified_table(target))
+            if target_filter_match(target):
+                query = query + ' WHERE ' + ' AND '.join(target_filter_match(target))
+
             self.__db_helper.copy_rows(self.__source_conn, self.__destination_conn, query, temp_target_name)
 
             # filter it down in the target database
@@ -184,28 +205,26 @@ class Subset:
 
             clauses = []
             # This is where we look at the FK augmentation.
+            fk_constraints = []
             for kc in relevant_key_constraints:
+                clause = '{} IN (SELECT {} FROM {})'.format(
+                    columns_tupled(kc['fk_columns']),
+                    columns_joined(kc['target_columns']),
+                    fully_qualified_table(mysql_db_name_hack(kc['target_table'], self.__destination_conn))
+                )
                 if kc.get('polymorphic_type'):
-                    clause = '{} IN (SELECT {} FROM {}) AND {}'.format(
-                        columns_tupled(kc['fk_columns']),
-                        columns_joined(kc['target_columns']),
-                        fully_qualified_table(mysql_db_name_hack(kc['target_table'], self.__destination_conn)),
-                        kc['polymorphic_type']
-                    )
-                    clauses.append(clause)
-                else:
-                    clause = '{} IN (SELECT {} FROM {})'.format(
-                        columns_tupled(kc['fk_columns']),
-                        columns_joined(kc['target_columns']),
-                        fully_qualified_table(mysql_db_name_hack(kc['target_table'], self.__destination_conn))
-                    )
-                    clauses.append(clause)
+                    clause = clause + ' AND {}'.format(kc['polymorphic_type'])
+                fk_constraints.extend([clause])
 
+            clauses.append(' OR '.join(fk_constraints))
             clauses.extend(upstream_filter_match(target, table_columns))
 
             select_query = 'SELECT * FROM {} WHERE TRUE AND {}'.format(quoter(temp_target_name), ' AND '.join(clauses))
             if config_reader.get_max_rows_per_table() is not None:
                 select_query += " LIMIT {}".format(config_reader.get_max_rows_per_table())
+            count_query = select_query.replace('*', 'COUNT(*)')
+            count = self.__db_helper.run_query(count_query, self.__destination_conn, count=True)
+            print("Going to insert {} records.".format(count))
             insert_query = 'INSERT INTO {} {}'.format(
                 fully_qualified_table(mysql_db_name_hack(target, self.__destination_conn)), select_query)
             self.__db_helper.run_query(insert_query, self.__destination_conn)
@@ -236,11 +255,23 @@ class Subset:
         else:
             return
 
+        print("Running downstream subsetting for {}.".format(table))
         temp_table = self.__db_helper.create_id_temp_table(self.__destination_conn, len(pk_columns))
+        print("Created temporary table, {}, for table {}.".format(temp_table, table))
 
         for r in referencing_tables:
             fk_table = r['fk_table']
             fk_columns = r['fk_columns']
+            pk_columns = r['target_columns']
+
+            count_query = 'SELECT COUNT(*) FROM {} WHERE {} NOT IN (SELECT {} FROM {})'.format(
+                fully_qualified_table(mysql_db_name_hack(fk_table, self.__destination_conn)),
+                columns_tupled(fk_columns),
+                columns_joined(pk_columns),
+                fully_qualified_table(mysql_db_name_hack(table, self.__destination_conn))
+            )
+            count = self.__db_helper.run_query(count_query, self.__destination_conn, count=True)
+            print("Going to insert {} records.".format(count))
 
             q = 'SELECT {} FROM {} WHERE {} NOT IN (SELECT {} FROM {})'.format(
                 columns_joined(fk_columns),

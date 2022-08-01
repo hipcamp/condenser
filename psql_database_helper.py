@@ -55,12 +55,14 @@ def copy_rows(source, destination, query, destination_table):
     while True:
         rows = cursor.fetchmany(fetch_row_count)
         if len(rows) == 0:
+            print("Not inserting any new rows into {}.".format(destination_table))
             break
         # we end up doing a lot of execute statements here, copying data.
         # using the inner_cursor means we don't log all the noise
         destination_cursor = destination.cursor().inner_cursor
 
         insert_query = 'INSERT INTO {} VALUES %s'.format(fully_qualified_table(destination_table))
+        print("Inserting rows into {}.".format(destination_table))
 
         execute_values(destination_cursor, insert_query, rows, template)
 
@@ -175,11 +177,13 @@ def get_unredacted_fk_relationships(tables, conn):
     return relationships
 
 
-def run_query(query, conn, commit=True):
+def run_query(query, conn, commit=True, count=False):
     with conn.cursor() as cur:
         cur.execute(query)
         if commit:
             conn.commit()
+        if count:
+            return cur.fetchone()[0]
 
 
 def get_table_count_estimate(table_name, schema, conn):

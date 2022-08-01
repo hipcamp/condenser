@@ -69,6 +69,10 @@ def get_fk_augmentation():
     return list(map(__convert_tonic_format, _config['fk_augmentation']))
 
 
+def get_target_filters():
+    return _config["upstream_filters"]
+
+
 def get_upstream_filters():
     return _config["upstream_filters"]
 

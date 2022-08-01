@@ -23,6 +23,15 @@ def columns_to_copy(table, relationships, conn):
                      if c not in columns_to_null else 'NULL as {}'.format(quoter(c)) for c in columns])
 
 
+def target_filter_match(target):
+    ret_val = []
+    filters = config_reader.get_target_filters()
+    for f in filters:
+        if "table" in f and target == f["table"]:
+            ret_val.append(f["condition"])
+    return ret_val
+
+
 def upstream_filter_match(target, table_columns):
     ret_val = []
     filters = config_reader.get_upstream_filters()
