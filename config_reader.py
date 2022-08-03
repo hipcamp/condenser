@@ -70,7 +70,7 @@ def get_fk_augmentation():
 
 
 def get_target_filters():
-    return _config["upstream_filters"]
+    return _config["target_filters"]
 
 
 def get_upstream_filters():

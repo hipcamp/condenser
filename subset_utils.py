@@ -27,7 +27,7 @@ def target_filter_match(target):
     ret_val = []
     filters = config_reader.get_target_filters()
     for f in filters:
-        if "table" in f and target == f["table"]:
+        if target == f["table"]:
             ret_val.append(f["condition"])
     return ret_val
 
