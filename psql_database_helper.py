@@ -49,9 +49,7 @@ def copy_rows(source, destination, query, destination_table):
         else:
             return '%s'
 
-    # template = '(' + ','.join([template_piece(dt) for dt in datatypes]) + ')'
     template = '(' + ','.join([template_piece(dt[1]) for dt in non_generated_columns]) + ')'
-    # columns = '(' + ','.join([dt[0] for dt in non_generated_columns]) + ')'
     columns = '("' + '","'.join([dt[0] for dt in non_generated_columns]) + '")'
 
     cursor_name = 'table_cursor_' + str(uuid.uuid4()).replace('-', '')
@@ -67,7 +65,6 @@ def copy_rows(source, destination, query, destination_table):
         # using the inner_cursor means we don't log all the noise
         destination_cursor = destination.cursor().inner_cursor
 
-        # insert_query = 'INSERT INTO {} VALUES %s'.format(fully_qualified_table(destination_table))
         insert_query = 'INSERT INTO {} {} VALUES %s'.format(fully_qualified_table(destination_table), columns)
         if always_generated_id:
             insert_query = 'INSERT INTO {} {} OVERRIDING SYSTEM VALUE VALUES %s'.format(
@@ -75,7 +72,6 @@ def copy_rows(source, destination, query, destination_table):
 
         updated_rows = [tuple(val for i, val in enumerate(row) if i not in generated_columns_positions) for row in rows]
 
-        # execute_values(destination_cursor, insert_query, rows, template)
         execute_values(destination_cursor, insert_query, updated_rows, template)
 
         destination_cursor.close()
