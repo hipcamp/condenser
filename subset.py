@@ -74,17 +74,18 @@ class Subset:
             processed_tables.add(target['table'])
         print('Direct target tables completed in {}s'.format(time.time()-start_time))
 
+        # SKIPPING GREEDY GRAB. ALL TABLES SHOULD BE INCLUDED, this duplicates rows...
         # greedily grab rows with foreign keys to rows in the target strata
-        upstream_tables = compute_upstream_tables(config_reader.get_initial_target_tables(), order)
-        print('\n--- QUERY ALL OTHER TARGETS WITH FK CONSTRAINTS ---\n')
-        print('Beginning greedy upstream subsetting with these tables: ' + str(upstream_tables))
-        start_time = time.time()
-        for idx, t in enumerate(upstream_tables):
-            print_progress(t, idx+1, len(upstream_tables))
-            data_added = self.__subset_upstream(t, processed_tables, relationships)
-            if data_added:
-                processed_tables.add(t)
-        print('Greedy subsettings completed in {}s'.format(time.time()-start_time))
+        # upstream_tables = compute_upstream_tables(config_reader.get_initial_target_tables(), order)
+        # print('\n--- QUERY ALL OTHER TARGETS WITH FK CONSTRAINTS ---\n')
+        # print('Beginning greedy upstream subsetting with these tables: ' + str(upstream_tables))
+        # start_time = time.time()
+        # for idx, t in enumerate(upstream_tables):
+        #     print_progress(t, idx+1, len(upstream_tables))
+        #     data_added = self.__subset_upstream(t, processed_tables, relationships)
+        #     if data_added:
+        #         processed_tables.add(t)
+        # print('Greedy subsettings completed in {}s'.format(time.time()-start_time))
 
         # process pass-through tables, you need this before subset_downstream,
         # so you can get all required downstream rows
